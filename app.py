@@ -140,7 +140,9 @@ elif selection in DATASET_REGISTRY:
         top3 = main_df.sort_values('S(α=0.5)', ascending=False).head(3).reset_index(drop=True)
         cols = st.columns(3)
         medals = ["🥇 1st", "🥈 2nd", "🥉 3rd"]
-        colors = ["#fef08a", "#e2e8f0", "#fed7aa"]
+        colors = ["linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)", 
+                  "linear-gradient(135deg, #e5e7eb 0%, #9ca3af 100%)", 
+                  "linear-gradient(135deg, #fb923c 0%, #ea580c 100%)"]
         for i in range(len(top3)):
             with cols[i]:
                 st.markdown(f"<div class='lb-card' style='background:{colors[i]}'><h3>{medals[i]}</h3><b>{top3.loc[i, 'Method']}</b><br>{top3.loc[i, 'Model']}+{top3.loc[i, 'Sampler']}<br><h2>{top3.loc[i, 'S(α=0.5)']:.4f}</h2></div>", unsafe_allow_html=True)
