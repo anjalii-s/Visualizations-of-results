@@ -2,652 +2,222 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
 import os
+from scipy.stats import spearmanr
 
 # ==========================================
 # PAGE CONFIGURATION & PROFESSIONAL CSS
 # ==========================================
 st.set_page_config(
-    page_title="Credit Risk XAI Framework",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="Credit Risk XAI Research Framework",
+    page_icon="🛡️",
+    layout="wide"
 )
 
+# Professional CSS to fix readability and styling
 st.markdown("""
     <style>
-    /* Global Typography & Background */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    /* Global Typography & Background */
     html, body, [class*="css"] { 
         font-family: 'Inter', sans-serif; 
-        background-color: #f8fafc; 
+        color: #1e293b !important; 
     }
-    
+    .stApp { background-color: #f8fafc; }
+
     /* Headers */
-    h1, h2, h3 { 
-        color: #0f172a; 
-        font-weight: 700; 
-        letter-spacing: -0.5px; 
+    h1, h2, h3 { color: #0f172a !important; font-weight: 700 !important; }
+
+    /* FIX: Readable Tabs (No white font) */
+    button[data-baseweb="tab"] {
+        background-color: #f1f5f9 !important;
+        border-radius: 4px 4px 0 0 !important;
+        margin-right: 5px !important;
     }
-    
-    /* Custom Metric Cards */
+    button[data-baseweb="tab"] div {
+        color: #475569 !important; /* Dark Slate Font */
+        font-weight: 600 !important;
+    }
+    button[data-baseweb="tab"][aria-selected="true"] {
+        background-color: #0284c7 !important;
+    }
+    button[data-baseweb="tab"][aria-selected="true"] div {
+        color: #ffffff !important; /* White text only for the active blue tab */
+    }
+
+    /* Metric & Leaderboard Cards */
     .metric-card { 
-        background-color: #ffffff; 
-        border: 1px solid #e2e8f0; 
-        border-radius: 8px; 
-        padding: 20px; 
-        text-align: center; 
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+        background: white; border: 1px solid #e2e8f0; border-radius: 8px; 
+        padding: 20px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
     }
-    .metric-value { 
-        font-size: 1.8rem; 
-        font-weight: 700; 
-        color: #0369a1; 
-        margin: 10px 0; 
-    }
-    .metric-label { 
-        font-size: 0.9rem; 
-        color: #64748b; 
-        font-weight: 500; 
-        text-transform: uppercase; 
-    }
-    
-    /* Leaderboard Cards */
+    .metric-value { font-size: 1.8rem; font-weight: 700; color: #0369a1 !important; }
     .lb-card { 
-        padding: 20px; 
-        border-radius: 12px; 
-        text-align: center; 
-        transition: transform 0.2s ease; 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
-    }
-    .lb-card:hover { 
-        transform: translateY(-5px); 
-    }
-    .lb-rank { 
-        font-size: 2rem; 
-        margin-bottom: 5px; 
-    }
-    .lb-method { 
-        font-size: 1.3rem; 
-        font-weight: 700; 
-        color: #0f172a; 
-        margin: 0; 
-    }
-    .lb-config { 
-        font-size: 0.9rem; 
-        color: #475569; 
-        margin: 5px 0 15px 0; 
-    }
-    .lb-score { 
-        font-size: 1.5rem; 
-        font-weight: 700; 
-        color: #0369a1; 
-        margin: 0; 
+        padding: 20px; border-radius: 12px; text-align: center; 
+        box-shadow: 0 10px 15px rgba(0,0,0,0.1); border: 1px solid #cbd5e1;
     }
     
     /* Insight Box */
     .insight-box { 
-        background-color: #ffffff; 
-        border-left: 4px solid #0369a1; 
-        padding: 15px 20px; 
-        border-radius: 6px; 
-        margin: 15px 0; 
-        color: #334155; 
-        font-size: 1rem; 
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+        background-color: #ffffff; border-left: 5px solid #0369a1; 
+        padding: 15px 20px; border-radius: 4px; margin: 15px 0; 
+        color: #334155; font-size: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
     }
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# CONSTANTS & CONFIGURATION
+# CONSTANTS & REGISTRY (Exact Filenames)
 # ==========================================
-# Professional color palette optimized for both light and dark themes
 METHOD_COLORS = {
-    'SHAP': '#64748b',         # Slate Gray (Baseline)
-    'Banzhaf': '#f59e0b',      # Amber
-    'Myerson': '#10b981',      # Emerald Green
-    'Owen-Domain': '#ef4444',  # Red
-    'Owen-Data': '#8b5cf6',    # Violet
-    'Owen-Model': '#ec4899',   # Pink
-    'R-Myerson': '#3b82f6'     # Blue (Proposed Method)
+    'SHAP': '#64748b', 'Banzhaf': '#f59e0b', 'Myerson': '#10b981',
+    'Owen-Domain': '#ef4444', 'Owen-Data': '#8b5cf6', 'Owen-Model': '#ec4899', 'R-Myerson': '#0284c7'
 }
 
-# Updated dataset registry with correct file names
 DATASET_REGISTRY = {
-    "German Credit": {
-        "main": "Ger_result.csv",
-        "wilcoxon": "Ger_result_wilcoxon.csv",
-        "nemenyi": "Ger_result_nemenyi.csv",
-        "corr": "Ger_result_correlation.csv",
-        "label": "Moderate Imbalance",
-        "imb": 30.0,
-        "description": "German credit dataset with 30% default rate, representing a moderately imbalanced credit risk scenario commonly found in European markets."
-    },
-    "Taiwan Credit": {
-        "main": "TW_result.csv",
-        "wilcoxon": "TW_result_wilcoxon.csv",
-        "nemenyi": "TW_result_nemenyi.csv",
-        "corr": "TW_result_correlation.csv",
-        "label": "Moderate Imbalance",
-        "imb": 22.12,
-        "description": "Taiwan credit card default dataset with 22.12% default rate, capturing payment behavior patterns in Asian credit markets."
+    "Coursera Loans": {
+        "main": "Coursera_result.csv", "wil": "Coursera_result_wilcoxon.csv", 
+        "nem": "Coursera_result_nemenyi.csv", "corr": "Coursera_result_correlation.csv", 
+        "imb": 1.0, "desc": "Extreme 1% default rate. Tests attribution stability at the breakdown point."
     },
     "Lending Club A (10%)": {
-        "main": "LC_result10.csv",
-        "wilcoxon": "LC_result_wilcoxon.csv",
-        "nemenyi": "LC_result_nemenyi.csv",
-        "corr": "LC_result_correlation.csv",
-        "label": "Industry Standard",
-        "imb": 10.0,
-        "description": "Lending Club dataset with 10% default rate, representing the industry-standard imbalance level typical in peer-to-peer lending platforms."
+        "main": "LC_result10.csv", "wil": "LC_result_wilcoxon.csv", 
+        "nem": "LC_result_nemenyi.csv", "corr": "LC_result_correlation.csv", 
+        "imb": 10.0, "desc": "Standard industry default rate (10%). Represents typical P2P lending risk."
     },
     "Lending Club B (4%)": {
-        "main": "LC4_result(1).csv",
-        "wilcoxon": "Lc66_wilcoxon_cliffs_results.csv",
-        "nemenyi": "Lc66_nemenyi_results (1).csv",
-        "corr": "Lc66_auc_I_correlation.csv",
-        "label": "Severe Imbalance",
-        "imb": 4.01,
-        "description": "Lending Club dataset with 4% default rate, representing a severely imbalanced scenario where traditional XAI methods begin to show significant instability."
+        "main": "LC4_result(1).csv", "wil": "Lc66_wilcoxon_cliffs_results.csv", 
+        "nem": "Lc66_nemenyi_results (1).csv", "corr": "Lc66_auc_I_correlation.csv", 
+        "imb": 4.01, "desc": "Severe imbalance (4%). Tests robustness with high-dimensional engineered features."
     },
-    "Coursera Loans": {
-        "main": "Coursera_result.csv",
-        "wilcoxon": "Coursera_result_wilcoxon.csv",
-        "nemenyi": "Coursera_result_nemenyi.csv",
-        "corr": "Coursera_result_correlation.csv",
-        "label": "Extreme Imbalance",
-        "imb": 1.0,
-        "description": "Educational loan dataset with 1% default rate, representing an extreme imbalance scenario that critically tests the robustness of XAI frameworks."
+    "Taiwan Credit": {
+        "main": "TW_result.csv", "wil": "TW_result_wilcoxon.csv", 
+        "nem": "TW_result_nemenyi.csv", "corr": "TW_result_correlation.csv", 
+        "imb": 22.12, "desc": "Temporal repayment data with moderate imbalance (22%)."
+    },
+    "German Credit": {
+        "main": "Ger_result.csv", "wil": "Ger_result_wilcoxon.csv", 
+        "nem": "Ger_result_nemenyi.csv", "corr": "Ger_result_correlation.csv", 
+        "imb": 30.0, "desc": "Basel benchmark dataset with 30% default rate and categorical-heavy features."
     }
 }
 
 # ==========================================
-# UTILITY FUNCTIONS
+# UTILITIES
 # ==========================================
 @st.cache_data
-def load_data(path, is_index=False):
-    """Robust file loader handling missing files and cleaning 'nan' Samplers."""
-    if not os.path.exists(path):
-        return None
+def load_and_clean(path, is_index=False):
+    if not os.path.exists(path): return None
     try:
         df = pd.read_csv(path, index_col=0 if is_index else None)
         if 'Sampler' in df.columns:
-            # Clean the Sampler column strictly
-            df['Sampler'] = df['Sampler'].astype(str).replace(['nan', 'NaN', 'None', 'nan '], 'None')
+            df['Sampler'] = df['Sampler'].astype(str).replace(['nan','NaN','None',' '], 'None')
+        for col in ['AUC', 'I', 'S(α=0.5)', 'Stability', 'Q']:
+            if col in df.columns: df[col] = pd.to_numeric(df[col], errors='coerce')
         return df
-    except Exception:
-        return None
-
-def color_effect(val):
-    """Color coding for effect sizes"""
-    v = str(val).lower()
-    if v == 'large': 
-        return 'color: #10b981; font-weight: bold;'
-    if v == 'medium': 
-        return 'color: #f59e0b; font-weight: bold;'
-    return 'color: #64748b;'
-
-def color_consensus(val):
-    """Color coding for consensus results"""
-    if '✓' in str(val): 
-        return 'background-color: #dcfce7; color: #166534; font-weight: bold;'
-    return 'color: #94a3b8;'
-
-def get_wilcoxon_sig(sig_val, p_val):
-    """Safely determines if Wilcoxon is significant."""
-    sig_str = str(sig_val).lower()
-    if '✓' in sig_str or 'yes' in sig_str or 'true' in sig_str: 
-        return True
-    try:
-        return float(p_val) < 0.05
-    except:
-        return False
+    except: return None
 
 # ==========================================
-# SIDEBAR NAVIGATION
+# SIDEBAR
 # ==========================================
-st.sidebar.markdown("### 🧭 Navigation")
-views = ["📊 Cross-Dataset Synthesis", "🏆 Leaderboards"] + list(DATASET_REGISTRY.keys())
-selection = st.sidebar.radio("Select View:", views)
-st.sidebar.markdown("---")
-st.sidebar.caption("Ensemble Learning & Coalition-aware Explainability for Imbalanced Credit Default Prediction")
+st.sidebar.title("🧭 Navigation")
+selection = st.sidebar.radio("View Selection:", ["📊 Global Synthesis", "🏆 Leaderboards"] + list(DATASET_REGISTRY.keys()))
 
 # ==========================================
-# VIEW 1: CROSS-DATASET SYNTHESIS
+# VIEW: GLOBAL SYNTHESIS
 # ==========================================
-if selection == "📊 Cross-Dataset Synthesis":
-    st.title("Cross-Dataset Performance Analysis")
+if selection == "📊 Global Synthesis":
+    st.title("Cross-Dataset Performance Synthesis")
+    st.markdown("<div class='insight-box'>Observe XAI stability shift as default rates drop from 30% to 1%.</div>", unsafe_allow_html=True)
     
-    st.markdown("""
-    <div class='insight-box'>
-    <b>Executive Summary:</b> This dashboard unifies the results of seven attribution methods across five financial datasets. 
-    By pressing the <b>Play</b> button below, you can visually track how standard Explainable AI (XAI) methods degrade as the dataset becomes increasingly imbalanced (from 30% down to 1% default rate), highlighting the robustness of the <b>R-Myerson</b> algorithm.
-    </div>
-    """, unsafe_allow_html=True)
-    
-    global_results = []
+    all_data = []
     for name, cfg in DATASET_REGISTRY.items():
-        df = load_data(cfg['main'])
+        df = load_and_clean(cfg['main'])
         if df is not None:
-            df_copy = df.copy()
-            df_copy['Imbalance'] = cfg['imb']
-            df_copy['Dataset'] = f"{name} ({cfg['imb']}%)"
-            df_copy['Config'] = df_copy['Method'] + "_" + df_copy['Model'] + "_" + df_copy['Sampler']
-            global_results.append(df_copy)
-            
-    if global_results:
-        # Combine and sort so the animation flows from highest to lowest imbalance
-        combined = pd.concat(global_results).sort_values('Imbalance', ascending=False)
-        
-        st.subheader("Dynamic Pareto Front Shift Across Imbalance Levels")
-        st.caption("Watch how the accuracy-interpretability trade-off evolves as class imbalance increases. Press ▶ to animate.")
-        
-        # Animated Bubble Chart
-        fig_anim = px.scatter(
-            combined, 
-            x="AUC", y="I", 
-            animation_frame="Dataset", 
-            animation_group="Config",
-            color="Method", 
-            symbol="Model",
-            size="S(α=0.5)",
-            hover_name="Sampler",
-            color_discrete_map=METHOD_COLORS,
-            range_x=[combined['AUC'].min() - 0.02, combined['AUC'].max() + 0.02],
-            range_y=[0.0, 1.05]
-        )
-        
-        fig_anim.update_traces(marker=dict(line=dict(width=1, color='white')), opacity=0.85)
-        fig_anim.update_layout(
-            template="plotly_white", 
-            height=600,
-            xaxis_title="Predictive Accuracy (AUC)",
-            yaxis_title="Interpretability (I-Score)"
-        )
-        # Speed up animation
-        fig_anim.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1200
-        st.plotly_chart(fig_anim, use_container_width=True)
-        
-        st.markdown("---")
-        st.subheader("Average Performance by Method Across Imbalance Levels")
-        st.caption("Bar heights represent the **average** S-score for each method across all base models and samplers for that dataset.")
-        
-        # Aggregate mean values for the bar chart
-        summary_df = combined.groupby(['Dataset', 'Method', 'Imbalance'])['S(α=0.5)'].mean().reset_index()
-        summary_df = summary_df.sort_values('Imbalance', ascending=False)
-        
-        # Calculate overall method sorting order (highest to lowest score)
-        method_order = summary_df.groupby('Method')['S(α=0.5)'].mean().sort_values(ascending=False).index.tolist()
-        
-        # Professional Bar Chart
-        fig_bar = px.bar(
-            summary_df, 
-            x='Dataset', 
-            y='S(α=0.5)', 
-            color='Method', 
-            barmode='group',
-            color_discrete_map=METHOD_COLORS,
-            category_orders={
-                "Dataset": summary_df['Dataset'].unique().tolist(),
-                "Method": method_order
-            }
-        )
-        
-        fig_bar.update_traces(marker_line_width=1, marker_line_color="white")
-        
-        fig_bar.update_layout(
-            xaxis_title="Datasets (Decreasing Default Rate →)", 
-            yaxis_title="Mean S(α=0.5) Score",
-            template="plotly_white",
-            hovermode="x unified",
-            height=450,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
+            df['Dataset'] = f"{name} ({cfg['imb']}%)"
+            df['Imb'] = cfg['imb']
+            all_data.append(df)
+    
+    if all_data:
+        combined = pd.concat(all_data).sort_values('Imb', ascending=False)
+        fig = px.scatter(combined, x="AUC", y="I", animation_frame="Dataset",
+                         color="Method", size="S(α=0.5)", color_discrete_map=METHOD_COLORS,
+                         range_y=[0, 1.1], template="plotly_white", height=600)
+        st.plotly_chart(fig, use_container_width=True)
 
 # ==========================================
-# VIEW 2: LEADERBOARDS
+# VIEW: LEADERBOARDS
 # ==========================================
 elif selection == "🏆 Leaderboards":
-    st.title("🏆 Global & Per-Dataset Leaderboards")
-    st.markdown("Dynamic rankings of top model-sampler configurations across all datasets and methods.")
-    
-    global_results = []
-    for name, cfg in DATASET_REGISTRY.items():
-        df = load_data(cfg['main'])
-        if df is not None:
-            df_copy = df.copy()
-            df_copy['Dataset_Name'] = name
-            df_copy['Imbalance'] = cfg['imb']
-            df_copy['Config'] = df_copy['Model'] + '–' + df_copy['Sampler'].fillna('None')
-            global_results.append(df_copy)
-            
-    if global_results:
-        combined = pd.concat(global_results)
-        metrics_of_interest = ['AUC', 'I', 'S(α=0.5)']
-        
-        st.markdown("### 🌍 Top Configurations Aggregated Across All Datasets")
-        st.caption("Calculated by **averaging** performance across all 5 datasets and all 7 explainability methods. Ranked in descending order.")
-        
-        overall_df = pd.DataFrame({"Rank": range(1, 6)})
-        for metric in metrics_of_interest:
-            top_5 = combined.groupby('Config')[metric].mean().reset_index()
-            top_5 = top_5.sort_values(by=metric, ascending=False).head(5).reset_index(drop=True)
-            overall_df[f"Config ({metric})"] = top_5['Config']
-            overall_df[f"{metric} Score"] = top_5[metric].apply(lambda x: f"{x:.3f}")
-            
-        st.dataframe(overall_df, hide_index=True, use_container_width=True)
-        
-        st.markdown("---")
-        st.markdown("### 📊 Top Configurations Per Dataset")
-        st.caption("Calculated by **averaging** the performance of Model-Sampler configurations across all 7 explainability methods for each specific dataset. Ranked in descending order.")
-        
-        # Render a clean table for each individual dataset
-        for ds_name in DATASET_REGISTRY.keys():
-            ds_matches = combined[combined['Dataset_Name'] == ds_name]
-            if not ds_matches.empty:
-                st.markdown(f"#### {ds_name} *(Default Rate: {DATASET_REGISTRY[ds_name]['imb']}%)*")
-                st.caption(DATASET_REGISTRY[ds_name]['description'])
-                ds_df = pd.DataFrame({"Rank": range(1, 4)})
-                
-                for metric in metrics_of_interest:
-                    top_3 = ds_matches.groupby('Config')[metric].mean().reset_index()
-                    top_3 = top_3.sort_values(by=metric, ascending=False).head(3).reset_index(drop=True)
-                    ds_df[f"Config ({metric})"] = top_3['Config']
-                    ds_df[f"{metric} Score"] = top_3[metric].apply(lambda x: f"{x:.3f}")
-                    
-                st.dataframe(ds_df, hide_index=True, use_container_width=True)
-                st.markdown("<br>", unsafe_allow_html=True)
+    st.title("🏆 Global XAI Rankings")
+    global_list = [load_and_clean(cfg['main']) for cfg in DATASET_REGISTRY.values() if load_and_clean(cfg['main']) is not None]
+    if global_list:
+        combined = pd.concat(global_list)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader("Stability (I-Score)")
+            st.dataframe(combined.groupby('Method')['I'].mean().sort_values(ascending=False).reset_index(), use_container_width=True)
+        with c2:
+            st.subheader("Predictive Integrity (S-Score)")
+            st.dataframe(combined.groupby('Method')['S(α=0.5)'].mean().sort_values(ascending=False).reset_index(), use_container_width=True)
 
 # ==========================================
-# VIEW 3: SPECIFIC DATASET DASHBOARD
+# VIEW: INDIVIDUAL DATASET
 # ==========================================
 else:
     cfg = DATASET_REGISTRY[selection]
-    st.title(f"{selection}")
-    st.caption(f"**{cfg['label']}** — Default Rate: {cfg['imb']}%")
-    st.markdown(f"<div class='insight-box'>{cfg['description']}</div>", unsafe_allow_html=True)
+    st.title(f"{selection} Detailed View")
+    st.markdown(f"<div class='insight-box'>{cfg['desc']}</div>", unsafe_allow_html=True)
     
-    # Load all files for the dataset
-    main_df = load_data(cfg['main'])
-    wil_df = load_data(cfg['wilcoxon'])
-    nem_df = load_data(cfg['nemenyi'], is_index=True)
-    corr_df = load_data(cfg['corr'])
+    main_df = load_and_clean(cfg['main'])
+    wil_df = load_and_clean(cfg['wil'])
+    nem_df = load_and_clean(cfg['nem'], is_index=True)
+    corr_df = load_and_clean(cfg['corr'])
     
-    if main_df is None:
-        st.error(f"⚠️ Primary results file ({cfg['main']}) not found. Please ensure the file is uploaded to the working directory.")
-        st.stop()
+    if main_df is not None:
+        # Podium
+        top3 = main_df.sort_values('S(α=0.5)', ascending=False).head(3).reset_index(drop=True)
+        cols = st.columns(3)
+        colors = ["#fef3c7", "#f1f5f9", "#ffedd5"]
+        medals = ["🥇 1st", "🥈 2nd", "🥉 3rd"]
+        for i in range(len(top3)):
+            with cols[i]:
+                st.markdown(f"<div class='lb-card' style='background:{colors[i]}'><h3>{medals[i]}</h3><b>{top3.loc[i, 'Method']}</b><br>{top3.loc[i, 'Model']}+{top3.loc[i, 'Sampler']}<br><div class='metric-value'>{top3.loc[i, 'S(α=0.5)']:.4f}</div></div>", unsafe_allow_html=True)
 
-    # --- TOP 3 LEADERBOARD (ABSOLUTE) ---
-    st.markdown("### 🏆 Top 3 Configurations by S-Score")
-    st.caption("Ranked by the single highest **absolute peak** S(α=0.5) score achieved by any specific row (Method + Model + Sampler combination).")
-    
-    top3 = main_df.sort_values('S(α=0.5)', ascending=False).head(3).reset_index(drop=True)
-    
-    cols = st.columns(3)
-    # Professional gradient backgrounds for podium
-    bg_styles = [
-        "background: linear-gradient(180deg, #fef3c7 0%, #ffffff 100%); border: 2px solid #fbbf24;",  # Gold
-        "background: linear-gradient(180deg, #e5e7eb 0%, #ffffff 100%); border: 2px solid #9ca3af;",  # Silver
-        "background: linear-gradient(180deg, #fed7aa 0%, #ffffff 100%); border: 2px solid #fb923c;"   # Bronze
-    ]
-    medals = ["🥇 1st Place", "🥈 2nd Place", "🥉 3rd Place"]
-    
-    for i in range(len(top3)):
-        with cols[i]:
-            st.markdown(f"""
-            <div class='lb-card' style='{bg_styles[i]}'>
-                <div class='lb-rank' style='color: #0f172a;'>{medals[i]}</div>
-                <h3 class='lb-method' style='color: #0f172a;'>{top3.loc[i, 'Method']}</h3>
-                <p class='lb-config' style='color: #475569;'>{top3.loc[i, 'Model']} + {top3.loc[i, 'Sampler']}</p>
-                <h2 class='lb-score' style='color: #0369a1;'>{top3.loc[i, 'S(α=0.5)']:.4f}</h2>
-            </div>
-            """, unsafe_allow_html=True)
-            
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # --- TABS NAVIGATION ---
-    t1, t2, t3, t4, t5 = st.tabs([
-        "🎯 Accuracy vs Interpretability", 
-        "🧩 Q vs I Analysis", 
-        "🔬 Statistical Significance", 
-        "🏅 Top Model-Samplers",
-        "🗄️ Raw Data"
-    ])
-    
-    # ==================================
-    # TAB 1: AUC vs I (PARETO)
-    # ==================================
-    with t1:
-        c1, c2 = st.columns([1.8, 1])
-        with c1:
-            fig_p = px.scatter(
-                main_df, 
-                x='AUC', 
-                y='I', 
-                color='Method', 
-                symbol='Model',
-                hover_data=['Sampler'], 
-                color_discrete_map=METHOD_COLORS,
-                title="Pareto Front: Accuracy vs. Interpretability"
-            )
-            fig_p.update_traces(marker=dict(size=14, opacity=0.85, line=dict(width=1, color='white')))
-            fig_p.update_layout(template="plotly_white", height=450)
-            st.plotly_chart(fig_p, use_container_width=True)
-            
-        with c2:
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            # Safe correlation calculation
-            try:
-                clean_df = main_df.dropna(subset=['AUC', 'I'])
-                if len(clean_df) >= 3:
-                    auc_i_rho = clean_df['AUC'].corr(clean_df['I'], method='spearman')
-                else:
-                    auc_i_rho = 0.0
-            except:
-                auc_i_rho = 0.0
-            
-            st.markdown(f"""
-            <div class='insight-box'>
-            <b>Trade-Off Analysis:</b><br><br>
-            The Spearman rank correlation between Predictive Accuracy (AUC) and Interpretability (I-Score) is <b>ρ = {auc_i_rho:.3f}</b>.<br><br>
-            <i>Interpretation:</i> {'A negative correlation indicates a classical trade-off: highly accurate models tend to have less stable explanations.' if auc_i_rho < -0.1 else 'A positive or near-zero correlation suggests that for this dataset, we can maintain stable explanations without sacrificing predictive power.'}
-            </div>
-            """, unsafe_allow_html=True)
-
-    # ==================================
-    # TAB 2: Q vs I (GROUP QUALITY)
-    # ==================================
-    with t2:
-        st.markdown("### Does Better Feature Grouping Lead to Better Explanations?")
-        st.caption("Analyzing the relationship between coalition quality (Q) and interpretability (I) for Owen-based methods.")
+        t1, t2, t3 = st.tabs(["🎯 Performance", "🔬 Statistics", "🗄️ Data"])
         
-        owen_df = main_df[main_df['Method'].isin(['Owen-Domain', 'Owen-Data', 'Owen-Model'])].copy()
-        owen_clean = owen_df.dropna(subset=['Q', 'I']).copy()
-        
-        if len(owen_clean) >= 3:
-            qc1, qc2 = st.columns([1.8, 1])
-            with qc1:
-                fig_q = px.scatter(
-                    owen_clean, 
-                    x='Q', 
-                    y='I', 
-                    color='Method',
-                    symbol='Model', 
-                    hover_data=['Sampler'], 
-                    color_discrete_map=METHOD_COLORS,
-                    title="Group Quality (Q) vs Interpretability (I)"
-                )
-                fig_q.update_traces(marker=dict(size=14, line=dict(width=1, color='white')))
-                fig_q.update_layout(template="plotly_white", height=450)
-                st.plotly_chart(fig_q, use_container_width=True)
+        with t1:
+            st.plotly_chart(px.scatter(main_df, x='AUC', y='I', color='Method', symbol='Model', 
+                                       color_discrete_map=METHOD_COLORS, size='S(α=0.5)', height=500), use_container_width=True)
             
-            with qc2:
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                q_rho = owen_clean['Q'].corr(owen_clean['I'], method='spearman')
-                if np.isnan(q_rho): 
-                    q_rho = 0.0
+            st.subheader("Spearman Rank Correlation (AUC vs I)")
+            if corr_df is not None:
+                # Handle different column naming in correlation files
+                rho = corr_df.get('Spearman_rho', [0])[0]
+                p = corr_df.get('Spearman_p', [1])[0]
+            else:
+                rho, p = spearmanr(main_df['AUC'].fillna(0), main_df['I'].fillna(0))
+            
+            st.markdown(f"<div class='metric-card'><div class='metric-value'>{rho:.3f}</div><div class='metric-label'>p-value: {p:.4f} {'✅ (Significant)' if p < 0.05 else '❌'}</div></div>", unsafe_allow_html=True)
                 
-                st.markdown(f"""
-                <div class='insight-box'>
-                <b>Derivation Method:</b><br>
-                This relationship uses the <b>Spearman rank correlation (ρ)</b>. We pair Group Quality (Q) and Interpretability (I) scores for each Owen variant configuration, rank them, and measure their monotonic relationship.<br><br>
-                <b>Analysis:</b><br>
-                Spearman ρ = <b>{q_rho:.3f}</b><br><br>
-                <i>Interpretation:</i> {'A strong positive relationship confirms that algorithmically defining better feature coalitions (higher Q) directly leads to more stable attributions (higher I).' if q_rho > 0.3 else 'The relationship is weak, indicating that baseline distribution rules impact stability more than coalition boundaries.'}
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("⚠️ Insufficient data points to compute Q vs I correlation for Owen variants in this dataset.")
-
-    # ==================================
-    # TAB 3: STATISTICAL SIGNIFICANCE
-    # ==================================
-    with t3:
-        st.markdown("### Statistical Rigor: Correlation & Pairwise Comparisons")
-        
-        # Display AUC-I Correlations
-        if corr_df is not None and not corr_df.empty:
-            c_rho, c_p = corr_df['Spearman_rho'].iloc[0], corr_df['Spearman_p'].iloc[0]
-            k_tau, k_p = corr_df['Kendall_tau'].iloc[0], corr_df['Kendall_p'].iloc[0]
-            
-            st.markdown("#### Accuracy vs. Interpretability Correlation")
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown(f"""
-                <div class='metric-card'>
-                    <div class='metric-label'>Spearman ρ</div>
-                    <div class='metric-value'>{c_rho:.3f}</div>
-                    <div style='color: #64748b; font-size:0.85rem;'>p-value: {c_p:.3f}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with c2:
-                st.markdown(f"""
-                <div class='metric-card'>
-                    <div class='metric-label'>Kendall τ</div>
-                    <div class='metric-value'>{k_tau:.3f}</div>
-                    <div style='color: #64748b; font-size:0.85rem;'>p-value: {k_p:.3f}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
-
-        st.markdown("#### Rigorous Pairwise Comparison")
-        st.caption("A *True Consensus Difference* is established only if BOTH the Wilcoxon test AND the Nemenyi post-hoc test confirm significance (p < 0.05).")
-        
-        sc1, sc2 = st.columns([1.1, 1])
-        
-        with sc1:
-            st.markdown("##### Wilcoxon & Consensus Table")
+        with t2:
             if wil_df is not None and nem_df is not None:
-                consensus_data = []
-                for _, row in wil_df.iterrows():
-                    m1, m2 = row['Method1'], row['Method2']
-                    eff = row.get('Effect_size', 'N/A')
-                    
-                    # Wilcoxon significance
-                    w_is_sig = get_wilcoxon_sig(row.get('Significant', ''), row.get('p_value', 1.0))
-                    w_display = "✓ Yes" if w_is_sig else "✗ No"
-                    
-                    # Nemenyi lookup
-                    n_p = 1.0
-                    try: 
-                        n_p = float(nem_df.loc[m1, m2])
-                    except KeyError:
-                        try: 
-                            n_p = float(nem_df.loc[m2, m1])
-                        except KeyError: 
-                            pass
-                    
-                    n_sig_bool = n_p < 0.05
-                    consensus = "✓ Yes" if (w_is_sig and n_sig_bool) else "✗ No"
-                    
-                    consensus_data.append({
-                        "Method 1": m1, 
-                        "Method 2": m2,
-                        "Wilcoxon Sig.": w_display,
-                        "Effect Size": str(eff).title(),
-                        "Consensus Diff": consensus
+                st.subheader("Statistical Consensus")
+                res = []
+                for _, r in wil_df.iterrows():
+                    m1, m2 = r['Method1'], r['Method2']
+                    p_nem = 1.0
+                    try: p_nem = nem_df.loc[m1, m2]
+                    except: 
+                        try: p_nem = nem_df.loc[m2, m1]
+                        except: pass
+                    res.append({
+                        "Comparison": f"{m1} vs {m2}", "Wilcoxon p": f"{r['p_value']:.4f}",
+                        "Nemenyi p": f"{p_nem:.4f}", "Consensus Sig": "✅" if (r['p_value'] < 0.05 and p_nem < 0.05) else "❌"
                     })
-                
-                st.dataframe(
-                    pd.DataFrame(consensus_data).style
-                    .map(color_effect, subset=['Effect Size'])
-                    .map(color_consensus, subset=['Wilcoxon Sig.', 'Consensus Diff']),
-                    hide_index=True, 
-                    height=450, 
-                    use_container_width=True
-                )
-            else: 
-                st.warning("⚠️ Both Wilcoxon and Nemenyi files are required to display the consensus table.")
-            
-        with sc2:
-            st.markdown("##### Nemenyi Post-hoc Heatmap")
-            if nem_df is not None:
-                # Green for significant (p < 0.05), Light gray for insignificant
-                colorscale = [
-                    [0.0, '#10b981'],      # Green (Significant)
-                    [0.049, '#10b981'],    # Green cutoff
-                    [0.05, '#f1f5f9'],     # Light gray (Insignificant)
-                    [1.0, '#f1f5f9']       # Light gray
-                ]
-                fig_nem = px.imshow(
-                    nem_df, 
-                    text_auto=".3f", 
-                    color_continuous_scale=colorscale, 
-                    zmin=0, 
-                    zmax=1.0
-                )
-                fig_nem.update_layout(
-                    height=450, 
-                    margin=dict(t=10, b=0, l=0, r=0), 
-                    coloraxis_showscale=False
-                )
-                st.plotly_chart(fig_nem, use_container_width=True)
-                st.markdown("<small><b>Reading Guide:</b> <span style='color:#10b981; font-weight:bold;'>Green cells (p < 0.05)</span> indicate statistically significant differences between methods. Light gray cells indicate no significant difference.</small>", unsafe_allow_html=True)
-            else: 
-                st.warning("⚠️ Nemenyi data file not found.")
-
-    # ==================================
-    # TAB 4: TOP MODEL-SAMPLERS
-    # ==================================
-    with t4:
-        st.markdown("### Top 5 Model-Sampler Configurations")
-        st.caption("Ranked by their **average** score across all 7 XAI methods. This identifies the most consistently robust predictive pipelines.")
+                st.table(res)
         
-        main_df['Model_Sampler'] = main_df['Model'] + '_' + main_df['Sampler'].fillna('None')
-        metrics_of_interest = ['AUC', 'I', 'S(α=0.5)']
-        
-        m_cols = st.columns(3)
-        for i, metric in enumerate(metrics_of_interest):
-            with m_cols[i]:
-                st.markdown(f"<h4 style='text-align: center; color: #0f172a;'>Top 5 by {metric}</h4>", unsafe_allow_html=True)
-                top_5 = main_df.groupby('Model_Sampler')[metric].mean().reset_index()
-                top_5 = top_5.sort_values(by=metric, ascending=False).head(5)
-                top_5 = top_5.rename(columns={'Model_Sampler': 'Configuration', metric: 'Avg Score'})
-                
-                st.dataframe(
-                    top_5.style.format({'Avg Score': "{:.4f}"}), 
-                    hide_index=True, 
-                    use_container_width=True
-                )
-                
-                avg_best = top_5['Avg Score'].mean()
-                st.markdown(f"<div style='text-align: center; font-size: 0.9rem; color: #475569; margin-top: 10px;'><b>Average of Top 5:</b> {avg_best:.4f}</div>", unsafe_allow_html=True)
-
-    # ==================================
-    # TAB 5: RAW DATA
-    # ==================================
-    with t5:
-        st.markdown("### Complete Dataset")
-        st.caption("View and download the complete raw analytical data for this dataset.")
-        st.dataframe(main_df, use_container_width=True)
-        
-        csv_data = main_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Download as CSV",
-            data=csv_data, 
-            file_name=f"{selection.replace(' ', '_')}_data.csv", 
-            mime="text/csv"
-        )
+        with t3:
+            st.dataframe(main_df, use_container_width=True)
+    else:
+        st.error(f"Required file {cfg['main']} not found.")
