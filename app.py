@@ -399,10 +399,10 @@ else:
         with cols[i]:
             st.markdown(f"""
             <div class='lb-card' style='{bg_styles[i]}'>
-                <div class='lb-rank'>{medals[i]}</div>
-                <h3 class='lb-method'>{top3.loc[i, 'Method']}</h3>
-                <p class='lb-config'>{top3.loc[i, 'Model']} + {top3.loc[i, 'Sampler']}</p>
-                <h2 class='lb-score'>{top3.loc[i, 'S(α=0.5)']:.4f}</h2>
+                <div class='lb-rank' style='color: #0f172a;'>{medals[i]}</div>
+                <h3 class='lb-method' style='color: #0f172a;'>{top3.loc[i, 'Method']}</h3>
+                <p class='lb-config' style='color: #475569;'>{top3.loc[i, 'Model']} + {top3.loc[i, 'Sampler']}</p>
+                <h2 class='lb-score' style='color: #0369a1;'>{top3.loc[i, 'S(α=0.5)']:.4f}</h2>
             </div>
             """, unsafe_allow_html=True)
             
@@ -439,7 +439,16 @@ else:
             
         with c2:
             st.markdown("<br><br>", unsafe_allow_html=True)
-            auc_i_rho = main_df['AUC'].corr(main_df['I'], method='spearman')
+            # Safe correlation calculation
+            try:
+                clean_df = main_df.dropna(subset=['AUC', 'I'])
+                if len(clean_df) >= 3:
+                    auc_i_rho = clean_df['AUC'].corr(clean_df['I'], method='spearman')
+                else:
+                    auc_i_rho = 0.0
+            except:
+                auc_i_rho = 0.0
+            
             st.markdown(f"""
             <div class='insight-box'>
             <b>Trade-Off Analysis:</b><br><br>
