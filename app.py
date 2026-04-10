@@ -144,13 +144,13 @@ DATASET_REGISTRY = {
         "description": "Lending Club dataset with 10% default rate, representing the industry-standard imbalance level typical in peer-to-peer lending platforms."
     },
     "Lending Club B (4%)": {
-        "main": "LC4_result(1).csv",
+        "main": "LC66_results_7methods_noleak (2) (1).csv",  # <--- POINT TO THE CORRECT FILE
         "wilcoxon": "Lc66_wilcoxon_cliffs_results.csv",
         "nemenyi": "Lc66_nemenyi_results (1).csv",
         "corr": "Lc66_auc_I_correlation.csv",
         "label": "Severe Imbalance",
         "imb": 4.01,
-        "description": "Lending Club dataset with 4% default rate, representing a severely imbalanced scenario where traditional XAI methods begin to show significant instability."
+        "description": "Lending Club dataset with 4% default rate..."
     },
     "Coursera Loans": {
         "main": "Coursera_result.csv",
