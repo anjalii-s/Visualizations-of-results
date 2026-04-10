@@ -469,7 +469,11 @@ else:
                     title="Group Quality (Q) vs Interpretability (I)"
                 )
                 fig_q.update_traces(marker=dict(size=14, line=dict(width=1, color='white')))
-                fig_q.update_layout(template="plotly_white", height=450)
+                fig_q.update_layout(
+                    template="plotly_white", 
+                    height=450,
+                    hovermode="x unified"  # <-- This forces Plotly to show all overlapping dots
+                )
                 st.plotly_chart(fig_q, use_container_width=True)
             
             with qc2:
