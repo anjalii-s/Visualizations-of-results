@@ -144,7 +144,7 @@ DATASET_REGISTRY = {
         "description": "Lending Club dataset with 10% default rate, representing the industry-standard imbalance level typical in peer-to-peer lending platforms."
     },
     "Lending Club B (4%)": {
-        "main": "LC66_results_7methods_noleak (2) (1).csv",  # <--- POINT TO THE CORRECT FILE
+        "main": "LC66_results_7methods_noleak (2) (1).csv",  # <--- MUST MATCH EXACTLY
         "wilcoxon": "Lc66_wilcoxon_cliffs_results.csv",
         "nemenyi": "Lc66_nemenyi_results (1).csv",
         "corr": "Lc66_auc_I_correlation.csv",
