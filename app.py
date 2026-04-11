@@ -4,7 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import os
-
+from scipy.stats import spearmanr
 # ==========================================
 # PAGE CONFIGURATION & PROFESSIONAL CSS
 # ==========================================
@@ -472,23 +472,56 @@ else:
                 fig_q.update_layout(
                     template="plotly_white", 
                     height=450,
-                    hovermode="x unified"  # <-- This forces Plotly to show all overlapping dots
+                    hovermode="x unified" 
                 )
                 st.plotly_chart(fig_q, use_container_width=True)
             
             with qc2:
                 st.markdown("<br><br>", unsafe_allow_html=True)
-                q_rho = owen_clean['Q'].corr(owen_clean['I'], method='spearman')
+                
+                # 1. Calculate exact p-value using scipy
+                q_rho, q_pval = spearmanr(owen_clean['Q'], owen_clean['I'])
                 if np.isnan(q_rho): 
-                    q_rho = 0.0
+                    q_rho, q_pval = 0.0, 1.0
+
+                # 2. Determine significance text
+                sig_color = "#10b981" if q_pval < 0.05 else "#ef4444"
+                sig_text = "Statistically Significant" if q_pval < 0.05 else "Not Significant"
+
+                # 3. Dynamic Interpretation Logic
+                if q_rho > 0.3:
+                    interp = "A <b>strong positive relationship</b> confirms that defining better feature coalitions (higher Q) directly leads to more stable attributions (higher I)."
+                elif q_rho < -0.3:
+                    interp = "A <b>negative relationship</b> is observed. This often happens when methods collapse features into a single cluster, triggering uniform redistribution which artificially spikes stability (I) despite 'poor' grouping (Q=1.0)."
+                else:
+                    interp = "The relationship is <b>weak or near-zero</b>, indicating that baseline attribution distribution rules impact stability more than specific coalition boundaries."
+
+                # 4. Calculate Q=1.0 Edge Cases
+                total_n = len(owen_clean)
+                q_ones = len(owen_clean[owen_clean['Q'] == 1.0])
                 
                 st.markdown(f"""
                 <div class='insight-box'>
-                <b>Derivation Method:</b><br>
-                This relationship uses the <b>Spearman rank correlation (ρ)</b>. We pair Group Quality (Q) and Interpretability (I) scores for each Owen variant configuration, rank them, and measure their monotonic relationship.<br><br>
-                <b>Analysis:</b><br>
-                Spearman ρ = <b>{q_rho:.3f}</b><br><br>
-                <i>Interpretation:</i> {'A strong positive relationship confirms that algorithmically defining better feature coalitions (higher Q) directly leads to more stable attributions (higher I).' if q_rho > 0.3 else 'The relationship is weak, indicating that baseline distribution rules impact stability more than coalition boundaries.'}
+                <b>Statistical Analysis (Spearman Rank):</b><br><br>
+                <div style='display: flex; justify-content: space-between; margin-bottom: 5px;'>
+                    <span>Correlation (ρ):</span>
+                    <span style='font-size: 1.1em; font-weight: bold; color: #0369a1;'>{q_rho:.3f}</span>
+                </div>
+                <div style='display: flex; justify-content: space-between; margin-bottom: 5px;'>
+                    <span>p-value:</span>
+                    <span style='font-weight: 500;'>{q_pval:.4f}</span>
+                </div>
+                <div style='text-align: right; font-size: 0.85em; color: {sig_color}; font-weight: bold; margin-bottom: 10px;'>
+                    {sig_text}
+                </div>
+                <hr style='margin: 10px 0; border: 0; border-top: 1px solid #e2e8f0;'>
+                <b>Interpretation:</b><br>
+                <span style='font-size: 0.95em;'>{interp}</span>
+                <hr style='margin: 10px 0; border: 0; border-top: 1px solid #e2e8f0;'>
+                <b style='color: #ea580c;'>⚠️ The Q=1.0 Edge Case:</b><br>
+                <span style='font-size: 0.85em; color: #475569;'>
+                Out of {total_n} valid configurations, <b>{q_ones}</b> triggered a single-cluster fallback (Q=1.0). When the algorithm forces all features into one group, it behaves identically to uniform magnitude redistribution. This mathematically destroys grouping structure (lowest Q) but spikes interpretability (highest I), explaining negative correlations in highly imbalanced datasets.
+                </span>
                 </div>
                 """, unsafe_allow_html=True)
         else:
