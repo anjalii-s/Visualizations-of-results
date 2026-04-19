@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import os
 from scipy.stats import spearmanr
+
 # ==========================================
 # PAGE CONFIGURATION & PROFESSIONAL CSS
 # ==========================================
@@ -144,7 +145,7 @@ DATASET_REGISTRY = {
         "description": "Lending Club dataset with 10% default rate, representing the industry-standard imbalance level typical in peer-to-peer lending platforms."
     },
     "Lending Club B (4%)": {
-        "main": "LC4.csv",  # <--- UPDATED TO MATCH YOUR NEW FILE NAME
+        "main": "LC4.csv",  
         "wilcoxon": "Lc66_wilcoxon_cliffs_results.csv",
         "nemenyi": "Lc66_nemenyi_results (1).csv",
         "corr": "Lc66_auc_I_correlation.csv",
@@ -402,11 +403,12 @@ else:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # --- TABS ---
-    t1, t2, t3, t4, t5 = st.tabs([
+    t1, t2, t3, t4, t5, t6 = st.tabs([
         "🎯 Accuracy vs Interpretability", 
         "🧩 Q vs I Analysis", 
         "🔬 Statistical Significance", 
         "🏅 Top Model-Samplers",
+        "📊 Method Averages",
         "🗄️ Raw Data"
     ])
     
@@ -653,8 +655,68 @@ else:
                 avg_best = top_5['Avg Score'].mean()
                 st.markdown(f"<div style='text-align: center; font-size: 0.9rem; color: #475569; margin-top: 10px;'><b>Average of Top 5:</b> {avg_best:.4f}</div>", unsafe_allow_html=True)
 
-    # TAB 5: RAW DATA
+    # TAB 5: METHOD AVERAGES
     with t5:
+        st.markdown("### Average Metrics by Method")
+        st.caption("Aggregated Interpretability (I), Kuncheva, and Stability scores across all base models and samplers for this dataset.")
+        
+        if 'I' in main_df.columns and 'Kuncheva' in main_df.columns and 'Stability' in main_df.columns:
+            # Group by Method and calculate means
+            avg_df = main_df.groupby('Method')[['I', 'Kuncheva', 'Stability']].mean().reset_index()
+            
+            # Melt the dataframe to make it friendly for a grouped Plotly bar chart
+            melted_df = avg_df.melt(
+                id_vars='Method', 
+                value_vars=['I', 'Kuncheva', 'Stability'], 
+                var_name='Metric', 
+                value_name='Average Score'
+            )
+            
+            # Use specific, distinct colors for these three metrics
+            metric_colors = {
+                'I': '#3b82f6',         # Blue
+                'Kuncheva': '#10b981',  # Emerald Green
+                'Stability': '#8b5cf6'  # Purple
+            }
+            
+            # Create Plotly grouped bar chart
+            fig_avg = px.bar(
+                melted_df,
+                x='Method',
+                y='Average Score',
+                color='Metric',
+                barmode='group',
+                color_discrete_map=metric_colors,
+                title="Method Comparison (I, Kuncheva, Stability)"
+            )
+            
+            fig_avg.update_layout(
+                template="plotly_white", 
+                height=450, 
+                hovermode="x unified",
+                xaxis_title="Explanation Method",
+                yaxis_title="Average Metric Score",
+                legend_title_text="Metric"
+            )
+            
+            st.plotly_chart(fig_avg, use_container_width=True)
+            
+            # Present the underlying calculated tabular data neatly
+            st.markdown("#### Tabular Data View")
+            st.dataframe(
+                avg_df.style.format({
+                    'I': "{:.4f}", 
+                    'Kuncheva': "{:.4f}", 
+                    'Stability': "{:.4f}"
+                }), 
+                hide_index=True, 
+                use_container_width=True
+            )
+        else:
+            st.warning("Required columns (I, Kuncheva, Stability) are not fully available in this dataset.")
+
+    # TAB 6: RAW DATA
+    with t6:
         st.markdown("### Complete Dataset")
         st.caption("View and download the complete raw analytical data for this dataset.")
         st.dataframe(main_df, use_container_width=True)
