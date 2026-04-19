@@ -674,10 +674,11 @@ else:
             
             # Use specific, distinct colors for these three metrics
             metric_colors = {
-                'I': '#3b82f6',         # Blue
-                'Kuncheva': '#10b981',  # Emerald Green
-                'Stability': '#8b5cf6'  # Purple
-            }
+                'I': '#A7E0FF',          # Baby Blue
+                'Kuncheva': '#C8F7C5',   # Soft Pastel Green
+                'Stability': '#F0D1FF'   # Light Pastel Purple/Pink
+                    }
+
             
             # Create Plotly grouped bar chart
             fig_avg = px.bar(
