@@ -658,28 +658,28 @@ else:
     # TAB 5: METHOD AVERAGES
     with t5:
         st.markdown("### Average Metrics by Method")
-        st.caption("Aggregated Interpretability (I), Kuncheva, and Stability scores across all base models and samplers for this dataset.")
+        st.caption("Aggregated Cosine, Kuncheva, and Stability scores across all base models and samplers for this dataset.")
         
-        if 'I' in main_df.columns and 'Kuncheva' in main_df.columns and 'Stability' in main_df.columns:
+        # Check for Cosine instead of I
+        if 'Cosine' in main_df.columns and 'Kuncheva' in main_df.columns and 'Stability' in main_df.columns:
             # Group by Method and calculate means
-            avg_df = main_df.groupby('Method')[['I', 'Kuncheva', 'Stability']].mean().reset_index()
+            avg_df = main_df.groupby('Method')[['Cosine', 'Kuncheva', 'Stability']].mean().reset_index()
             
             # Melt the dataframe to make it friendly for a grouped Plotly bar chart
             melted_df = avg_df.melt(
                 id_vars='Method', 
-                value_vars=['I', 'Kuncheva', 'Stability'], 
+                value_vars=['Cosine', 'Kuncheva', 'Stability'], 
                 var_name='Metric', 
                 value_name='Average Score'
             )
             
             # Use specific, distinct colors for these three metrics
             metric_colors = {
-                'I': '#A7E0FF',          # Baby Blue
-                'Kuncheva': '#C8F7C5',   # Soft Pastel Green
-                'Stability': '#F0D1FF'   # Light Pastel Purple/Pink
-                    }
+                'Cosine': '#A7E0FF',      # Baby Blue
+                'Kuncheva': '#C8F7C5',    # Soft Pastel Green
+                'Stability': '#F0D1FF'    # Light Pastel Purple/Pink
+            }
 
-            
             # Create Plotly grouped bar chart
             fig_avg = px.bar(
                 melted_df,
@@ -688,7 +688,7 @@ else:
                 color='Metric',
                 barmode='group',
                 color_discrete_map=metric_colors,
-                title="Method Comparison (I, Kuncheva, Stability)"
+                title="Method Comparison (Cosine, Kuncheva, Stability)"
             )
             
             fig_avg.update_layout(
@@ -706,7 +706,7 @@ else:
             st.markdown("#### Tabular Data View")
             st.dataframe(
                 avg_df.style.format({
-                    'I': "{:.4f}", 
+                    'Cosine': "{:.4f}", 
                     'Kuncheva': "{:.4f}", 
                     'Stability': "{:.4f}"
                 }), 
@@ -714,7 +714,7 @@ else:
                 use_container_width=True
             )
         else:
-            st.warning("Required columns (I, Kuncheva, Stability) are not fully available in this dataset.")
+            st.warning("Required columns (Cosine, Kuncheva, Stability) are not fully available in this dataset.")
 
     # TAB 6: RAW DATA
     with t6:
